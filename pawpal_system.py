@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple, Dict
+from collections import defaultdict
 
 
 def _parse_time(value: str) -> int:
@@ -27,18 +28,54 @@ class Task:
     priority: str  # "low", "medium", "high"
     frequency: Optional[str] = None  # e.g. "daily", "weekly"
     preferred_time: Optional[str] = None  # "morning", "afternoon", "evening"
+    start_time: Optional[str] = None  # "HH:MM" optional scheduled start time
+    due_date: Optional[str] = None  # ISO date "YYYY-MM-DD", optional recurrence anchor
     is_completed: bool = False
 
     def __post_init__(self):
+        if self.start_time is not None:
+            _parse_time(self.start_time)  # validate format
+
+        if self.due_date is not None:
+            try:
+                datetime.fromisoformat(self.due_date)
+            except ValueError as exc:
+                raise ValueError(f"Invalid due_date format: {self.due_date}. Expected YYYY-MM-DD") from exc
+
         if self.duration_minutes <= 0:
             raise ValueError("Task duration_minutes must be > 0")
         if self.priority.lower() not in ["low", "medium", "high"]:
             raise ValueError("Task priority must be 'low', 'medium', or 'high'")
         self.priority = self.priority.lower()
 
-    def mark_complete(self) -> None:
-        """Mark this task as completed."""
+    def mark_complete(self) -> Optional["Task"]:
+        """Mark this task as completed and auto-schedule next recurrence if applicable.
+
+        If the task has frequency "daily" or "weekly", creates a new Task instance
+        for the next occurrence using today's date + timedelta.
+
+        Returns:
+            New Task instance for the next recurrence, or None if not recurring.
+        """
         self.is_completed = True
+
+        if self.frequency in ("daily", "weekly"):
+            # create next occurrence
+            days = 1 if self.frequency == "daily" else 7
+            next_date = datetime.today().date() + timedelta(days=days)
+            next_task = Task(
+                title=self.title,
+                duration_minutes=self.duration_minutes,
+                priority=self.priority,
+                frequency=self.frequency,
+                preferred_time=self.preferred_time,
+                start_time=self.start_time,
+                due_date=next_date.isoformat(),
+                is_completed=False,
+            )
+            return next_task
+
+        return None
 
     def mark_incomplete(self) -> None:
         """Mark this task as not completed yet."""
@@ -88,6 +125,26 @@ class Pet:
     def get_pending_tasks(self) -> List[Task]:
         """Return a list of tasks that are not yet completed."""
         return [task for task in self.tasks if not task.is_completed]
+
+    def complete_task(self, title: str) -> Optional[Task]:
+        """Mark a task as complete by title and auto-add recurrence if generated.
+
+        Args:
+            title: The title of the task to mark complete.
+
+        Returns:
+            The new recurring Task instance if created, or None.
+
+        Raises:
+            ValueError: If no task with the given title exists.
+        """
+        for task in self.tasks:
+            if task.title == title:
+                next_task = task.mark_complete()
+                if next_task is not None:
+                    self.add_task(next_task)
+                return next_task
+        raise ValueError(f"Task '{title}' not found")
 
 
 class Owner:
@@ -155,6 +212,73 @@ class Scheduler:
                 t.title,
             ),
         )
+
+    def sort_by_time(self, tasks: List[Task]) -> List[Task]:
+        """Sort tasks by HH:MM start_time. Tasks without start_time go to end.
+
+        Args:
+            tasks: List of Task objects to sort.
+
+        Returns:
+            Sorted list of tasks, with tasks having start_time first (earliest first),
+            followed by tasks without start_time.
+        """
+        return sorted(
+            tasks,
+            key=lambda t: _parse_time(t.start_time) if t.start_time is not None else float("inf"),
+        )
+
+    def filter_tasks(self, completed: Optional[bool] = None, pet_name: Optional[str] = None) -> List[Task]:
+        """Filter tasks by completion state and/or pet name.
+
+        Args:
+            completed: If True, return only completed tasks; if False, only pending;
+                       if None, ignore completion status.
+            pet_name: Name of the pet to filter tasks for; if None, include all pets.
+
+        Returns:
+            List of tasks matching the filter criteria.
+        """
+        filtered: List[Task] = []
+        pets = self.owner.pets
+
+        if pet_name is not None:
+            pet = self.owner.get_pet(pet_name)
+            if pet is None:
+                return []
+            pets = [pet]
+
+        for pet in pets:
+            for task in pet.tasks:
+                if completed is not None and task.is_completed != completed:
+                    continue
+                filtered.append(task)
+
+        return filtered
+
+    def detect_conflicts(self) -> List[str]:
+        """Return lightweight conflict warnings for tasks that share the same start_time.
+
+        Scans all tasks (including completed) and groups them by start_time.
+        For any time slot with multiple tasks, generates a warning message.
+
+        Returns:
+            List of warning strings describing conflicts, or empty list if none.
+        """
+        tasks = self.owner.get_all_tasks(include_completed=True)
+        time_map = defaultdict(list)
+        for task in tasks:
+            if task.start_time:
+                time_map[task.start_time].append(task)
+
+        warnings = []
+        for time_slot, tasks_at_time in time_map.items():
+            if len(tasks_at_time) > 1:
+                titles = [t.title for t in tasks_at_time]
+                warnings.append(
+                    f"Conflict at {time_slot}: {len(tasks_at_time)} tasks scheduled concurrently ({', '.join(titles)})."
+                )
+        return warnings
 
     def generate_schedule(self, include_completed: bool = False) -> List[Dict]:
         """Generate a daily schedule for all pending tasks in owner time window."""

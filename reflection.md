@@ -30,6 +30,8 @@ Actions user should be able to perform:
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
 
+One tradeoff the scheduler makes is only checking for exact time matches in conflict detection instead of detecting overlapping durations. For example, if one task starts at 08:00 and lasts 30 minutes, and another starts at 08:15, the current system would not flag this as a conflict even though they overlap. This tradeoff is reasonable because the scheduling algorithm places tasks sequentially without allowing overlaps, so the primary conflicts occur when tasks are explicitly set to the same start time, keeping the logic simple and focused on user-specified times rather than complex duration calculations.
+
 ---
 
 ## 3. AI Collaboration

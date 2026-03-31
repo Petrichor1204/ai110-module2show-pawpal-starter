@@ -22,6 +22,16 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Smarter Scheduling
+
+This PawPal+ implementation includes advanced scheduling features:
+
+- **Task Sorting and Filtering**: Sort tasks by start time or filter by completion status and pet name for better organization.
+- **Recurring Tasks**: Automatically create next occurrences for daily or weekly tasks when marked complete, using Python's `timedelta` for accurate date calculations.
+- **Conflict Detection**: Lightweight warnings for tasks scheduled at the same exact time, preventing scheduling errors without crashing the system.
+
+---
+
 ## Getting started
 
 ### Setup
