@@ -92,12 +92,29 @@ st.divider()
 
 st.subheader("Build Schedule")
 if st.button("Generate schedule"):
-    plan = scheduler.generate_schedule()
+    plan, conflicts = scheduler.generate_schedule()
     if not plan:
         st.info("No schedule was generated (no tasks or no available time).")
     else:
-        st.write("### Today's Schedule")
-        for item in plan:
-            st.write(f"{item['start']} - {item['end']}: {item['pet']} -> {item['task'].title} [{item['priority']}]")
+        st.success("Schedule generated successfully!")
+        # Display schedule as a table
+        schedule_data = [
+            {
+                "Time": f"{item['start']} - {item['end']}",
+                "Pet": item['pet'],
+                "Task": item['task'].title,
+                "Priority": item['priority'],
+                "Duration (min)": item['task'].duration_minutes,
+            }
+            for item in plan
+        ]
+        st.table(schedule_data)
         st.write("---")
         st.text(scheduler.explain_plan())
+
+    # Show conflicts if any
+    if conflicts:
+        st.warning("⚠️ Scheduling Conflicts Detected:")
+        for conflict in conflicts:
+            st.warning(conflict)
+        st.info("Tip: Consider adjusting task durations, priorities, or your available time window to fit more tasks.")

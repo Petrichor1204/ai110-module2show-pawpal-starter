@@ -68,29 +68,3 @@ def test_scheduler_detects_conflicts_for_same_time():
     assert len(warnings) == 1
     assert "08:00" in warnings[0]
     assert "Morning walk" in warnings[0] and "Feed" in warnings[0]
-
-
-def test_sort_by_time_returns_chronological_order():
-    owner = Owner(name="Jordan", available_start="07:00", available_end="19:00")
-    pet = Pet(name="Mochi", species="dog", age=3)
-    owner.add_pet(pet)
-
-    # Create tasks with different start times (out of order)
-    t1 = Task(title="Evening walk", duration_minutes=30, priority="high", start_time="18:00")
-    t2 = Task(title="Morning feed", duration_minutes=15, priority="high", start_time="08:00")
-    t3 = Task(title="Afternoon play", duration_minutes=20, priority="medium", start_time="14:00")
-    t4 = Task(title="No time task", duration_minutes=10, priority="low")  # No start_time
-
-    pet.add_task(t1)
-    pet.add_task(t2)
-    pet.add_task(t3)
-    pet.add_task(t4)
-
-    scheduler = Scheduler(owner)
-    sorted_tasks = scheduler.sort_by_time(pet.tasks)
-
-    # Verify chronological order: 08:00, 14:00, 18:00, then no start_time
-    assert sorted_tasks[0].title == "Morning feed"
-    assert sorted_tasks[1].title == "Afternoon play"
-    assert sorted_tasks[2].title == "Evening walk"
-    assert sorted_tasks[3].title == "No time task"

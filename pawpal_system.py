@@ -49,14 +49,7 @@ class Task:
         self.priority = self.priority.lower()
 
     def mark_complete(self) -> Optional["Task"]:
-        """Mark this task as completed and auto-schedule next recurrence if applicable.
-
-        If the task has frequency "daily" or "weekly", creates a new Task instance
-        for the next occurrence using today's date + timedelta.
-
-        Returns:
-            New Task instance for the next recurrence, or None if not recurring.
-        """
+        """Mark this task as completed and auto-schedule next recurrence if applicable."""
         self.is_completed = True
 
         if self.frequency in ("daily", "weekly"):
@@ -127,17 +120,7 @@ class Pet:
         return [task for task in self.tasks if not task.is_completed]
 
     def complete_task(self, title: str) -> Optional[Task]:
-        """Mark a task as complete by title and auto-add recurrence if generated.
-
-        Args:
-            title: The title of the task to mark complete.
-
-        Returns:
-            The new recurring Task instance if created, or None.
-
-        Raises:
-            ValueError: If no task with the given title exists.
-        """
+        """Mark a task as complete by title and auto-add recurrence if generated."""
         for task in self.tasks:
             if task.title == title:
                 next_task = task.mark_complete()
@@ -280,12 +263,12 @@ class Scheduler:
                 )
         return warnings
 
-    def generate_schedule(self, include_completed: bool = False) -> List[Dict]:
-        """Generate a daily schedule for all pending tasks in owner time window."""
+    def generate_schedule(self, include_completed: bool = False) -> Tuple[List[Dict], List[str]]:
+        """Generate a daily schedule for all pending tasks in owner time window, and return conflicts."""
         tasks = self.owner.get_all_tasks(include_completed=include_completed)
         if not tasks:
             self.schedule = []
-            return []
+            return [], []
 
         tasks = [t for t in tasks if t.duration_minutes > 0]
         tasks = self._sort_tasks(tasks)
@@ -294,12 +277,21 @@ class Scheduler:
         end_minute = _parse_time(self.owner.available_end)
 
         plan = []
+        conflicts = []
 
         for task in tasks:
             if task.is_completed:
                 continue
             task_end = current_minute + task.duration_minutes
             if task_end > end_minute:
+                pet_of_task = next(
+                    (pet for pet in self.owner.pets if task in pet.tasks),
+                    None,
+                )
+                pet_name = pet_of_task.name if pet_of_task else "unknown"
+                conflicts.append(
+                    f"Task '{task.title}' for {pet_name} ({task.duration_minutes}m) cannot fit in remaining time."
+                )
                 continue
             pet_of_task = next(
                 (pet for pet in self.owner.pets if task in pet.tasks),
@@ -315,7 +307,7 @@ class Scheduler:
             plan.append(plan_item)
             current_minute = task_end
         self.schedule = plan
-        return plan
+        return plan, conflicts
 
     def explain_plan(self) -> str:
         """Provide a human-readable explanation of the generated schedule."""
